@@ -1,0 +1,41 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # lets you trigger manually from the Actions tab
+
+permissions:
+  contents: write           # needed to push to gh-pages branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Check out your repo ────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Inject the HF backend URL into the HTML ────────────────────
+      #       BACKEND_URL is stored in GitHub → Settings → Secrets
+      #       e.g.  https://your-username-crackathon-api.hf.space
+      - name: Inject secrets
+        run: |
+          sed -i 's|__BACKEND_URL__|${{ secrets.BACKEND_URL }}|g' nagpur_inspector.html
+          sed -i 's|__MAPILLARY_TOKEN__|${{ secrets.MAPILLARY_TOKEN }}|g' nagpur_inspector.html
+
+      # ── 3. Verify placeholders were replaced (helpful for debugging) ──
+      - name: Verify injection
+        run: |
+          grep -c 'hf.space' nagpur_inspector.html && echo "✓ Backend URL injected" || echo "⚠ Check BACKEND_URL secret"
+          grep -c 'MLY|' nagpur_inspector.html && echo "✓ Mapillary token injected" || echo "⚠ Check MAPILLARY_TOKEN secret"
+
+      # ── 4. Push the processed file to the gh-pages branch ────────────
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          publish_branch: gh-pages
+          exclude_assets: '.github,*.py,Dockerfile,requirements.txt,README.md,*.pt'

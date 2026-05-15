@@ -236,7 +236,7 @@ input.w220{width:220px}
   <div id="mly-creds" style="display:flex;align-items:center;gap:8px">
     <div class="fgrp">
       <span class="flbl">Token</span>
-      <input type="text" class="w220" id="mly-token" value="" placeholder="MLY|…" oninput="saveMlyToken()"/>
+      <input type="text" class="w220" id="mly-token" value="MLY|26712176828449999|e7c0250d2a9b1019ebf5dc6b3b98450a" placeholder="MLY|…" oninput="saveMlyToken()"/>
     </div>
   </div>
 
@@ -356,7 +356,7 @@ input.w220{width:220px}
     <div class="bkbar">
       <div class="cdot" id="cdot"></div>
       <span class="flbl">HF Endpoint</span>
-      <input type="text" id="backend" value="" placeholder="https://your-space.hf.space"/>
+      <input type="text" id="backend" value="https://mangesh47-crackathon-api.hf.space" placeholder="https://your-space.hf.space"/>
     </div>
   </div>
 </div>
@@ -1076,10 +1076,13 @@ window.addEventListener('load', async () => {
   // ── Mapillary token is baked in at deploy time via GitHub Actions secret.
   // Save it to sessionStorage so it persists across soft refreshes.
   const tok = document.getElementById('mly-token').value.trim();
-  if (tok && tok !== '') sessionStorage.setItem('crk_mly', tok);
+  if (tok && tok !== 'MLY|26712176828449999|e7c0250d2a9b1019ebf5dc6b3b98450a') sessionStorage.setItem('crk_mly', tok);
 
   refreshQuota();
 });
 </script>
 </body>
 </html>
+  
+ 
+ 

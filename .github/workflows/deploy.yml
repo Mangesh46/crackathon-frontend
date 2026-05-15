@@ -20,16 +20,27 @@ jobs:
       # ── 2. Inject the HF backend URL into the HTML ────────────────────
       #       BACKEND_URL is stored in GitHub → Settings → Secrets
       #       e.g.  https://your-username-crackathon-api.hf.space
+      # ── 2. Inject the HF backend URL into the HTML ────────────────────
       - name: Inject secrets
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
         run: |
-          sed -i 's|__BACKEND_URL__|${{ secrets.BACKEND_URL }}|g' nagpur_inspector.html
-          sed -i 's|__MAPILLARY_TOKEN__|${{ secrets.MAPILLARY_TOKEN }}|g' nagpur_inspector.html
+          python3 - <<'EOF'
+          import os
+          with open("nagpur_inspector.html", "r") as f:
+              html = f.read()
+          html = html.replace("__BACKEND_URL__", os.environ["BACKEND_URL"])
+          html = html.replace("__MAPILLARY_TOKEN__", os.environ["MAPILLARY_TOKEN"])
+          with open("nagpur_inspector.html", "w") as f:
+              f.write(html)
+          EOF
 
       # ── 3. Verify placeholders were replaced (helpful for debugging) ──
       - name: Verify injection
         run: |
-          grep -c 'hf.space' nagpur_inspector.html && echo "✓ Backend URL injected" || echo "⚠ Check BACKEND_URL secret"
-          grep -c 'MLY|' nagpur_inspector.html && echo "✓ Mapillary token injected" || echo "⚠ Check MAPILLARY_TOKEN secret"
+          grep -q 'hf.space' nagpur_inspector.html && echo "✓ Backend URL injected" || echo "⚠ Check BACKEND_URL secret"
+          grep -q 'MLY|' nagpur_inspector.html && echo "✓ Mapillary token injected" || echo "⚠ Check MAPILLARY_TOKEN secret"
 
       # ── 4. Push the processed file to the gh-pages branch ────────────
       - name: Deploy to gh-pages

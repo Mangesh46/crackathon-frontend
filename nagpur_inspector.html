@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Crackathon — Nagpur Road Inspector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#080808;--s1:#101010;--s2:#161616;--s3:#1e1e1e;--s4:#262626;
+  --b1:rgba(255,255,255,0.05);--b2:rgba(255,255,255,0.10);
+  --tx:#e5e1da;--mu:#4a4744;--mu2:#7a7672;
+  --acc:#e8a020;--acc-bg:rgba(232,160,32,0.1);--acc-b:rgba(232,160,32,0.28);
+  --red:#e04a49;--grn:#4caf72;--amb:#e8a020;--blu:#5b9cf6;
+  --red-b:rgba(224,74,73,0.1);--grn-b:rgba(76,175,114,0.1);
+  --mono:'IBM Plex Mono',monospace;--sans:'Syne',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:var(--sans);color:var(--tx);font-size:13px;display:flex;flex-direction:column}
+::-webkit-scrollbar{width:3px;height:3px}::-webkit-scrollbar-thumb{background:var(--s4)}
+
+/* ── TOPBAR ── */
+.topbar{
+  display:flex;align-items:center;gap:10px;padding:0 14px;height:46px;
+  border-bottom:1px solid var(--b1);background:var(--s1);flex-shrink:0;overflow:hidden;
+}
+.logo{display:flex;align-items:baseline;gap:5px;flex-shrink:0}
+.logo-main{font-size:13px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--acc)}
+.logo-city{font-family:var(--mono);font-size:9px;color:var(--mu2);letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border:1px solid var(--b2);border-radius:2px}
+.divider{width:1px;height:18px;background:var(--b2);flex-shrink:0}
+
+.mode-tabs{display:flex;border:1px solid var(--b1);border-radius:3px;overflow:hidden;flex-shrink:0}
+.mode-tab{font-family:var(--mono);font-size:9px;letter-spacing:.07em;text-transform:uppercase;padding:5px 10px;cursor:pointer;background:transparent;color:var(--mu2);border:none;transition:all .15s;white-space:nowrap}
+.mode-tab.active{background:var(--acc-bg);color:var(--acc)}
+.mode-tab:not(:last-child){border-right:1px solid var(--b1)}
+
+.fgrp{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.flbl{font-family:var(--mono);font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
+input[type=text],input[type=number],input[type=password]{
+  background:var(--s2);border:1px solid var(--b1);color:var(--tx);
+  font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;outline:none;transition:border-color .15s;
+}
+input:focus{border-color:var(--acc)}
+input[type=number]{width:100px}
+input.w180{width:180px}
+input.w220{width:220px}
+.btn{font-family:var(--mono);font-size:9px;letter-spacing:.07em;text-transform:uppercase;padding:5px 11px;border-radius:3px;cursor:pointer;background:transparent;border:1px solid var(--b2);color:var(--mu2);transition:all .15s;white-space:nowrap;flex-shrink:0}
+.btn:hover{color:var(--tx)}
+.btn-acc{background:var(--acc-bg);border-color:var(--acc-b);color:var(--acc)}
+.btn-acc:hover{background:rgba(232,160,32,.18)}
+.btn-acc:disabled{opacity:.3;cursor:not-allowed}
+.btn-stop{background:var(--red-bg);border-color:rgba(224,74,73,.3);color:var(--red)}
+.btn-stop:hover{background:rgba(224,74,73,.18)}
+.badge-pill{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:2px;letter-spacing:.05em}
+.bp-idle{background:var(--s4);color:var(--mu2)}
+.bp-run{background:var(--acc-bg);color:var(--acc);animation:blink 1s infinite}
+.bp-ok{background:var(--grn-b);color:var(--grn)}
+.bp-err{background:var(--red-b);color:var(--red)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── LAYOUT ── */
+.main{display:grid;grid-template-columns:256px 1fr 294px;flex:1;overflow:hidden;min-height:0}
+
+/* ─── LEFT NAV ─── */
+.pane-nav{display:flex;flex-direction:column;border-right:1px solid var(--b1);overflow:hidden;background:var(--s1)}
+
+/* leaflet map */
+.map-wrap{height:190px;flex-shrink:0;position:relative;border-bottom:1px solid var(--b1)}
+.map-wrap .leaflet-container{background:#0a0a0a}
+
+/* zone filter */
+.zone-row{display:flex;gap:0;border-bottom:1px solid var(--b1);flex-shrink:0;overflow-x:auto}
+.zone-row::-webkit-scrollbar{height:2px}
+.zone-btn{font-family:var(--mono);font-size:8px;letter-spacing:.05em;text-transform:uppercase;padding:5px 8px;cursor:pointer;background:transparent;border:none;color:var(--mu);white-space:nowrap;transition:all .15s;border-bottom:2px solid transparent;flex-shrink:0}
+.zone-btn.active{color:var(--acc);border-bottom-color:var(--acc);background:var(--acc-bg)}
+.zone-btn:hover:not(.active){color:var(--mu2)}
+
+/* progress bar row */
+.progress-row{padding:7px 10px;border-bottom:1px solid var(--b1);flex-shrink:0;display:flex;align-items:center;gap:8px}
+.prog-label{font-family:var(--mono);font-size:9px;color:var(--mu);flex:1}
+.prog-nums{font-family:var(--mono);font-size:9px;color:var(--mu2);flex-shrink:0;white-space:nowrap}
+.prog-track{flex:1;height:3px;background:var(--s4);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:var(--acc);border-radius:2px;transition:width .5s ease}
+
+/* point list */
+.point-list{flex:1;overflow-y:auto}
+.pt-item{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--b1);transition:background .1s;min-height:38px}
+.pt-item:hover{background:var(--s2)}
+.pt-item.active{background:var(--acc-bg);border-left:2px solid var(--acc)}
+.pt-item.active .pt-road{color:var(--acc)}
+.pt-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;transition:background .3s}
+.pt-info{flex:1;min-width:0}
+.pt-id{font-family:var(--mono);font-size:8px;color:var(--mu);letter-spacing:.05em}
+.pt-road{font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;line-height:1.3}
+.pt-status{font-family:var(--mono);font-size:8px;flex-shrink:0}
+
+/* ─── CENTER ─── */
+.pane-center{display:flex;flex-direction:column;overflow:hidden;background:#070707}
+
+.viewport{flex:1;position:relative;overflow:hidden;min-height:0}
+.viewport img{width:100%;height:100%;object-fit:contain;display:block;opacity:0;transition:opacity .3s}
+.viewport img.vis{opacity:1}
+.viewport canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.vp-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mu)}
+.vp-empty svg{opacity:.1}
+.vp-empty p{font-family:var(--mono);font-size:10px;color:var(--mu);text-align:center;line-height:1.8}
+.vp-empty strong{color:var(--acc)}
+.mly-thumbs{display:flex;gap:5px;overflow-x:auto;padding:6px 10px;border-bottom:1px solid var(--b1);flex-shrink:0;background:var(--s1)}
+.mly-thumbs:empty{display:none}
+.mly-thumb{width:64px;height:44px;object-fit:cover;border-radius:2px;cursor:pointer;flex-shrink:0;border:2px solid transparent;opacity:.65;transition:all .15s}
+.mly-thumb:hover{opacity:1}
+.mly-thumb.sel{border-color:var(--acc);opacity:1}
+
+/* SV overlay */
+#sv-panorama{flex:1;min-height:0;position:relative}
+#sv-captured{position:absolute;inset:0;z-index:10;background:#070707;display:none}
+#sv-captured img{width:100%;height:100%;object-fit:contain;display:block}
+#sv-captured canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.sv-back{position:absolute;top:7px;left:7px;z-index:11;font-family:var(--mono);font-size:8px;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:2px;cursor:pointer;background:rgba(8,8,8,.85);border:1px solid var(--b2);color:var(--mu2);backdrop-filter:blur(4px)}
+.sv-coord{position:absolute;bottom:7px;left:7px;z-index:11;font-family:var(--mono);font-size:8px;color:var(--mu2);background:rgba(8,8,8,.75);padding:3px 7px;border-radius:2px;backdrop-filter:blur(4px);pointer-events:none}
+
+/* center footer */
+.center-footer{display:flex;align-items:center;gap:8px;padding:7px 12px;border-top:1px solid var(--b1);background:var(--s1);flex-shrink:0}
+.pt-name-tag{font-family:var(--mono);font-size:9px;color:var(--mu);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pt-name-tag span{color:var(--mu2)}
+.auto-status{font-family:var(--mono);font-size:8px;color:var(--acc);flex-shrink:0;white-space:nowrap}
+
+/* quota */
+.sv-quota{display:flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid var(--b1);border-radius:2px;background:var(--s2);flex-shrink:0}
+.q-used{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--tx)}
+.q-slash{font-family:var(--mono);font-size:9px;color:var(--mu)}
+.q-bar{width:36px;height:2px;background:var(--s4);border-radius:1px;overflow:hidden}
+.q-fill{height:100%;width:0%;background:var(--grn);border-radius:1px;transition:width .4s}
+.q-lbl{font-family:var(--mono);font-size:8px;color:var(--mu);text-transform:uppercase;letter-spacing:.05em}
+.q-warn .q-used{color:var(--amb)}.q-warn .q-fill{background:var(--amb)}
+.q-crit .q-used{color:var(--red)}.q-crit .q-fill{background:var(--red)}
+
+/* ─── RIGHT PANE ─── */
+.pane-right{display:flex;flex-direction:column;border-left:1px solid var(--b1);overflow:hidden;background:var(--s1)}
+.r-head{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid var(--b1);flex-shrink:0}
+.r-title{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--mu)}
+.r-tabs{display:flex;border-bottom:1px solid var(--b1);flex-shrink:0}
+.r-tab{flex:1;font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.08em;padding:9px;text-align:center;cursor:pointer;color:var(--mu);border:none;background:transparent;transition:all .15s;border-bottom:2px solid transparent}
+.r-tab.active{color:var(--acc);border-bottom-color:var(--acc);background:var(--acc-bg)}
+.r-panel{flex:1;overflow-y:auto;display:none}
+.r-panel.active{display:block}
+
+/* result sections */
+.rsec{padding:11px 13px;border-bottom:1px solid var(--b1)}
+.slbl{font-family:var(--mono);font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--mu);margin-bottom:8px}
+.score-row{display:flex;align-items:center;gap:10px}
+.score-num{font-family:var(--mono);font-size:40px;font-weight:600;line-height:1}
+.s-good{color:var(--grn)}.s-mod{color:var(--amb)}.s-bad{color:var(--red)}
+.sbar{height:3px;background:var(--s4);border-radius:2px;overflow:hidden;margin-bottom:6px}
+.sbar-fill{height:100%;border-radius:2px;transition:width .8s cubic-bezier(.2,.8,.2,1)}
+.verdict{font-size:12px;font-weight:700;margin-bottom:1px}
+.verdict-sub{font-family:var(--mono);font-size:9px;color:var(--mu)}
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.stile{background:var(--s2);border:1px solid var(--b1);border-radius:2px;padding:7px 9px}
+.stile .t{font-family:var(--mono);font-size:8px;color:var(--mu);margin-bottom:2px;text-transform:uppercase;letter-spacing:.05em}
+.stile .v{font-family:var(--mono);font-size:12px;font-weight:500}
+.det-list{display:flex;flex-direction:column;gap:4px}
+.drow{display:flex;align-items:center;gap:7px;padding:6px 9px;background:var(--s2);border:1px solid var(--b1);border-radius:2px;animation:fi .2s ease}
+@keyframes fi{from{opacity:0;transform:translateY(2px)}}
+.ddot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dname{flex:1;font-size:10px}
+.dbar{width:44px;height:2px;background:var(--b1);border-radius:1px;flex-shrink:0}
+.dbar-fill{height:100%;border-radius:1px}
+.dpct{font-family:var(--mono);font-size:9px;color:var(--mu2);min-width:26px;text-align:right}
+.no-det{font-family:var(--mono);font-size:10px;color:var(--grn);text-align:center;padding:8px}
+.rec{font-size:10px;line-height:1.7;color:var(--mu2);background:var(--s2);border-radius:2px;padding:9px 11px;border-left:2px solid var(--amb)}
+.rec-u{border-left-color:var(--red)}.rec-g{border-left-color:var(--grn)}
+.empty-r{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:280px;gap:10px;color:var(--mu);padding:2rem;text-align:center}
+.empty-r svg{opacity:.1}
+.empty-r p{font-family:var(--mono);font-size:10px;line-height:1.8}
+
+/* coverage tab */
+.cov-zone{padding:10px 13px;border-bottom:1px solid var(--b1)}
+.cov-zone-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer}
+.cov-zone-name{font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px}
+.cov-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.cov-pct{font-family:var(--mono);font-size:9px;color:var(--mu2)}
+.cov-bar{height:3px;background:var(--s4);border-radius:2px;overflow:hidden;margin-bottom:5px}
+.cov-fill{height:100%;border-radius:2px;transition:width .5s ease}
+.cov-stats{display:flex;gap:10px}
+.cov-stat{font-family:var(--mono);font-size:8px;color:var(--mu)}
+.cov-stat span{color:var(--mu2)}
+.cov-summary{padding:10px 13px;border-bottom:1px solid var(--b1)}
+.cov-big{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-top:8px}
+.cov-card{background:var(--s2);border:1px solid var(--b1);border-radius:2px;padding:8px 9px;text-align:center}
+.cov-card .t{font-family:var(--mono);font-size:8px;color:var(--mu);margin-bottom:3px}
+.cov-card .v{font-family:var(--mono);font-size:16px;font-weight:600}
+.cov-card.g .v{color:var(--grn)}.cov-card.r .v{color:var(--red)}.cov-card.a .v{color:var(--amb)}
+
+/* backend bar */
+.bkbar{display:flex;align-items:center;gap:6px;padding:6px 12px;border-top:1px solid var(--b1);background:var(--s1);flex-shrink:0}
+.cdot{width:6px;height:6px;border-radius:50%;background:var(--mu);flex-shrink:0;transition:background .3s}
+.cdot.ok{background:var(--grn)}.cdot.err{background:var(--red)}
+.bkbar input{flex:1;font-size:9px}
+
+/* leaflet overrides for dark theme */
+.leaflet-tile-pane{filter:brightness(0.65) saturate(0.7) hue-rotate(185deg)}
+.leaflet-control-attribution{display:none}
+.leaflet-control-zoom a{background:var(--s2)!important;color:var(--mu2)!important;border-color:var(--b2)!important}
+
+/* auto scan banner */
+.auto-banner{display:none;align-items:center;gap:8px;padding:5px 10px;background:rgba(232,160,32,.08);border-bottom:1px solid var(--acc-b);font-family:var(--mono);font-size:9px;color:var(--acc);flex-shrink:0}
+.auto-banner.vis{display:flex}
+.auto-spinner{width:8px;height:8px;border:1.5px solid var(--acc);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.auto-skip{margin-left:auto;cursor:pointer;color:var(--mu2);text-decoration:underline}
+.auto-skip:hover{color:var(--tx)}
+</style>
+</head>
+<body>
+
+<!-- ── TOPBAR ── -->
+<div class="topbar">
+  <div class="logo">
+    <span class="logo-main">Crackathon</span>
+    <span class="logo-city">Nagpur</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="mode-tabs">
+    <button class="mode-tab active" id="tab-mly" onclick="setMode('mapillary')">Mapillary</button>
+    <button class="mode-tab" id="tab-sv" disabled title="Coming soon" style="opacity:.45;cursor:not-allowed">Street View <span style="font-size:7px;letter-spacing:.05em;padding:1px 4px;border-radius:2px;background:var(--acc-bg);color:var(--acc);margin-left:3px;vertical-align:middle">SOON</span></button>
+  </div>
+
+  <!-- Mapillary creds -->
+  <div id="mly-creds" style="display:flex;align-items:center;gap:8px">
+    <div class="fgrp">
+      <span class="flbl">Token</span>
+      <input type="text" class="w220" id="mly-token" value="" placeholder="MLY|…" oninput="saveMlyToken()"/>
+    </div>
+  </div>
+
+  <!-- SV creds — hidden; Street View coming soon -->
+  <div id="sv-creds" style="display:none">
+    <input type="hidden" id="gmaps-key" value=""/>
+    <div id="sv-quota" style="display:none"><span id="q-used">0</span><span id="q-fill"></span></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <button class="btn btn-acc" id="auto-btn" onclick="toggleAutoScan()" title="Auto-advance through all Nagpur inspection points">▶ Auto Scan</button>
+  <span class="badge-pill bp-idle" id="status-pill">idle</span>
+</div>
+
+<!-- ── AUTO SCAN BANNER ── -->
+<div class="auto-banner" id="auto-banner">
+  <div class="auto-spinner"></div>
+  <span id="auto-banner-text">Scanning…</span>
+  <span class="auto-skip" onclick="skipPoint()">Skip point</span>
+</div>
+
+<!-- ── MAIN ── -->
+<div class="main">
+
+  <!-- LEFT: Navigator -->
+  <div class="pane-nav">
+    <!-- Leaflet map -->
+    <div class="map-wrap"><div id="leaflet-map" style="width:100%;height:100%"></div></div>
+
+    <!-- Zone filter -->
+    <div class="zone-row" id="zone-row">
+      <button class="zone-btn active" data-zone="all" onclick="filterZone('all')">All</button>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-row">
+      <span class="prog-label" id="prog-label">0 / 75 inspected</span>
+      <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+      <span class="prog-nums" id="prog-nums">0%</span>
+    </div>
+
+    <!-- Point list -->
+    <div class="point-list" id="point-list"></div>
+  </div>
+
+  <!-- CENTER: Image -->
+  <div class="pane-center">
+    <!-- Mapillary UI -->
+    <div id="mly-ui" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="mly-thumbs" id="mly-thumbs"></div>
+      <div class="viewport" id="mly-viewport">
+        <div class="vp-empty" id="mly-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M3 12h18M3 6l9-3 9 3M3 18l9 3 9-3"/></svg>
+          <p>Select a point from the navigator<br/>or click <strong>Auto Scan</strong> to begin</p>
+        </div>
+        <img id="mly-img" alt=""/>
+        <canvas id="mly-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Street View UI — Coming Soon -->
+    <div id="sv-ui" style="display:none;flex-direction:column;flex:1;min-height:0;align-items:center;justify-content:center">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:40px;text-align:center;max-width:320px">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".35"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+        <div style="font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc);padding:3px 10px;border:1px solid var(--acc-bg);border-radius:2px;background:var(--acc-bg)">Coming Soon</div>
+        <p style="font-size:12px;color:var(--mu2);line-height:1.6;margin:0">Google Street View integration is under development.<br/>Use <strong style="color:var(--fg)">Mapillary</strong> mode for street-level imagery — it's free and fully functional.</p>
+        <button class="mode-tab active" onclick="setMode('mapillary')" style="font-size:9px;padding:6px 14px;border-radius:3px;border:1px solid var(--acc)">Switch to Mapillary →</button>
+      </div>
+      <!-- keep these hidden so SV JS refs don't crash -->
+      <div id="sv-panorama" style="display:none"></div>
+      <div id="sv-captured" style="display:none"><img id="sv-img" alt=""/><canvas id="sv-canvas"></canvas><div class="sv-coord" id="sv-coord"></div></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="center-footer">
+      <div class="pt-name-tag" id="pt-name-tag">Select a point →</div>
+      <span class="auto-status" id="auto-status" style="display:none"></span>
+      <button class="btn btn-acc" id="analyse-btn" onclick="runAnalysis()" disabled>Analyse</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: Analysis + Coverage -->
+  <div class="pane-right">
+    <div class="r-head">
+      <span class="r-title">Analysis</span>
+      <span class="badge-pill bp-idle" id="pill">idle</span>
+    </div>
+    <div class="r-tabs">
+      <button class="r-tab active" id="rtab-result"   onclick="switchTab('result')">Current</button>
+      <button class="r-tab"        id="rtab-coverage" onclick="switchTab('coverage')">Coverage</button>
+    </div>
+
+    <!-- Current result -->
+    <div class="r-panel active" id="rpanel-result">
+      <div class="empty-r" id="empty-r">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+        <p>Select a Nagpur road point<br/>and click Analyse</p>
+      </div>
+      <div id="r-result" style="display:none"></div>
+    </div>
+
+    <!-- Coverage -->
+    <div class="r-panel" id="rpanel-coverage">
+      <div class="cov-summary">
+        <div class="slbl">Overall Progress</div>
+        <div class="cov-big" id="cov-big">
+          <div class="cov-card a"><div class="t">Scanned</div><div class="v" id="cv-scanned">0</div></div>
+          <div class="cov-card g"><div class="t">Clean</div><div class="v" id="cv-clean">0</div></div>
+          <div class="cov-card r"><div class="t">Damaged</div><div class="v" id="cv-damaged">0</div></div>
+        </div>
+      </div>
+      <div id="zone-coverage"></div>
+    </div>
+
+    <!-- Backend -->
+    <div class="bkbar">
+      <div class="cdot" id="cdot"></div>
+      <span class="flbl">HF Endpoint</span>
+      <input type="text" id="backend" value="" placeholder="https://your-space.hf.space"/>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   NAGPUR INSPECTION DATA — 75 points, 8 zones
+═══════════════════════════════════════════════════ */
+const ZONES = [
+  { id:'central', name:'Central',   color:'#e8a020' },
+  { id:'north',   name:'North',     color:'#5b9cf6' },
+  { id:'ne',      name:'N-East',    color:'#a78bfa' },
+  { id:'east',    name:'East',      color:'#22d3ee' },
+  { id:'south',   name:'South',     color:'#4caf72' },
+  { id:'sw',      name:'S-West',    color:'#f97316' },
+  { id:'west',    name:'West',      color:'#e04a49' },
+  { id:'ring',    name:'Ring Road', color:'#f472b6' },
+];
+
+const POINTS = [
+  /* CENTRAL — Sitabuldi, Sadar, Dharampeth, Ramdaspeth */
+  {id:'c01',zone:'central',road:'Sitabuldi Circle',          lat:21.1455,lng:79.0822},
+  {id:'c02',zone:'central',road:'Central Avenue',            lat:21.1460,lng:79.0795},
+  {id:'c03',zone:'central',road:'Sadar Main Road',           lat:21.1518,lng:79.0862},
+  {id:'c04',zone:'central',road:'Dharampeth Road',           lat:21.1535,lng:79.0755},
+  {id:'c05',zone:'central',road:'Ramdaspeth Main',           lat:21.1510,lng:79.0885},
+  {id:'c06',zone:'central',road:'Residency Road',            lat:21.1472,lng:79.0840},
+  {id:'c07',zone:'central',road:'Cotton Market Road',        lat:21.1475,lng:79.0913},
+  {id:'c08',zone:'central',road:'West High Court Rd',        lat:21.1488,lng:79.0778},
+  {id:'c09',zone:'central',road:'VCA Ground Road',           lat:21.1495,lng:79.0760},
+
+  /* NORTH — Katol Road corridor, Kalamna, Mahal, Gandhibagh */
+  {id:'n01',zone:'north',road:'Katol Rd – Civil Lines',     lat:21.1580,lng:79.0695},
+  {id:'n02',zone:'north',road:'Katol Rd – Fetri',           lat:21.1800,lng:79.0520},
+  {id:'n03',zone:'north',road:'Katol Rd – Outer',           lat:21.2000,lng:79.0350},
+  {id:'n04',zone:'north',road:'Itwari Station Road',        lat:21.1545,lng:79.0948},
+  {id:'n05',zone:'north',road:'Gandhibagh Road',            lat:21.1562,lng:79.0935},
+  {id:'n06',zone:'north',road:'Nara Road',                  lat:21.1598,lng:79.0742},
+  {id:'n07',zone:'north',road:'Kalamna Market Road',        lat:21.1718,lng:79.0862},
+  {id:'n08',zone:'north',road:'Fetri-Nandanvan Link',       lat:21.1680,lng:79.0780},
+  {id:'n09',zone:'north',road:'Kalmeshwar Rd Junction',     lat:21.1650,lng:79.0578},
+  {id:'n10',zone:'north',road:'North Ring Link Rd',         lat:21.1805,lng:79.0702},
+
+  /* NORTH-EAST — Kamptee Road, Bhandara Road, Koradi */
+  {id:'ne01',zone:'ne',road:'Kamptee Rd – City',           lat:21.1682,lng:79.1102},
+  {id:'ne02',zone:'ne',road:'Kamptee Rd – Mid',            lat:21.1850,lng:79.1350},
+  {id:'ne03',zone:'ne',road:'Kamptee Rd – Outer',          lat:21.2052,lng:79.1598},
+  {id:'ne04',zone:'ne',road:'Bhandara Rd – Jaripatka',     lat:21.1432,lng:79.1052},
+  {id:'ne05',zone:'ne',road:'Bhandara Rd – Mid',           lat:21.1402,lng:79.1248},
+  {id:'ne06',zone:'ne',road:'Bhandara Rd – Outer',         lat:21.1352,lng:79.1448},
+  {id:'ne07',zone:'ne',road:'Koradi Road',                  lat:21.1750,lng:79.1252},
+  {id:'ne08',zone:'ne',road:'Pardi Road',                   lat:21.1422,lng:79.1198},
+  {id:'ne09',zone:'ne',road:'Old Kamptee Road',             lat:21.1602,lng:79.1052},
+
+  /* EAST — Amravati Rd East, Wathoda, Nandanvan, Besa */
+  {id:'e01',zone:'east',road:'Amravati Rd – Pardi',        lat:21.1490,lng:79.1018},
+  {id:'e02',zone:'east',road:'Amravati Rd – Mid',          lat:21.1498,lng:79.1202},
+  {id:'e03',zone:'east',road:'Wathoda Road',               lat:21.1282,lng:79.1048},
+  {id:'e04',zone:'east',road:'Nandanvan Road',             lat:21.1382,lng:79.0978},
+  {id:'e05',zone:'east',road:'Besa Road',                  lat:21.1352,lng:79.1148},
+  {id:'e06',zone:'east',road:'Manish Nagar Road',          lat:21.1462,lng:79.0998},
+  {id:'e07',zone:'east',road:'Sakkardara Road',            lat:21.1402,lng:79.0958},
+
+  /* SOUTH — Wardha Road (full stretch), Ambazari, Wanjari */
+  {id:'s01',zone:'south',road:'Wardha Rd – VNIT',          lat:21.1380,lng:79.0612},
+  {id:'s02',zone:'south',road:'Wardha Rd – Mankapur',      lat:21.1278,lng:79.0558},
+  {id:'s03',zone:'south',road:'Wardha Rd – Somalwada',     lat:21.1178,lng:79.0490},
+  {id:'s04',zone:'south',road:'Wardha Rd – IT Park',       lat:21.1102,lng:79.0438},
+  {id:'s05',zone:'south',road:'Wardha Rd – Airport',       lat:21.0942,lng:79.0448},
+  {id:'s06',zone:'south',road:'Wardha Rd – Wadi',          lat:21.0800,lng:79.0378},
+  {id:'s07',zone:'south',road:'Khapri Road',               lat:21.0952,lng:79.0622},
+  {id:'s08',zone:'south',road:'Wanjari Road',              lat:21.1352,lng:79.0648},
+  {id:'s09',zone:'south',road:'Ambazari Road',             lat:21.1482,lng:79.0692},
+  {id:'s10',zone:'south',road:'Mankapur Square',           lat:21.1328,lng:79.0608},
+
+  /* SOUTH-WEST — Hingna Road, MIDC, Butibori */
+  {id:'sw01',zone:'sw',road:'Hingna Rd – City End',        lat:21.1352,lng:79.0298},
+  {id:'sw02',zone:'sw',road:'Hingna Rd – Mid',             lat:21.1202,lng:79.0150},
+  {id:'sw03',zone:'sw',road:'Hingna Rd – MIDC',            lat:21.1102,lng:79.0000},
+  {id:'sw04',zone:'sw',road:'Hingna – Outer',              lat:21.0952,lng:78.9800},
+  {id:'sw05',zone:'sw',road:'Butibori Road',               lat:21.0702,lng:78.9500},
+  {id:'sw06',zone:'sw',road:'Nari Road',                   lat:21.1352,lng:78.9748},
+  {id:'sw07',zone:'sw',road:'Kapsi Link Road',             lat:21.1420,lng:78.9848},
+
+  /* WEST — Amravati Road West, Kalmeshwar, Godhni, Khaperkheda */
+  {id:'w01',zone:'west',road:'Amravati Rd – West',         lat:21.1500,lng:79.0352},
+  {id:'w02',zone:'west',road:'Amravati Rd – Outer W',      lat:21.1500,lng:79.0002},
+  {id:'w03',zone:'west',road:'Amravati Rd – Far',          lat:21.1500,lng:78.9602},
+  {id:'w04',zone:'west',road:'Kalmeshwar Road',            lat:21.1698,lng:78.9700},
+  {id:'w05',zone:'west',road:'Godhni Road',                lat:21.1748,lng:78.9848},
+  {id:'w06',zone:'west',road:'Khaperkheda Road',           lat:21.1802,lng:79.0102},
+
+  /* RING ROAD — Outer Ring & MIHAN */
+  {id:'r01',zone:'ring',road:'Ring Road – North',          lat:21.1898,lng:79.0900},
+  {id:'r02',zone:'ring',road:'Ring Road – NE',             lat:21.1802,lng:79.1298},
+  {id:'r03',zone:'ring',road:'Ring Road – East',           lat:21.1598,lng:79.1500},
+  {id:'r04',zone:'ring',road:'Ring Road – SE',             lat:21.1352,lng:79.1452},
+  {id:'r05',zone:'ring',road:'Ring Road – South',          lat:21.1098,lng:79.1202},
+  {id:'r06',zone:'ring',road:'Ring Road – SW',             lat:21.1002,lng:79.0798},
+  {id:'r07',zone:'ring',road:'Ring Road – West',           lat:21.1102,lng:79.0198},
+  {id:'r08',zone:'ring',road:'Ring Road – NW',             lat:21.1398,lng:78.9998},
+  {id:'r09',zone:'ring',road:'MIHAN Road',                 lat:21.0878,lng:79.0478},
+  {id:'r10',zone:'ring',road:'MIHAN – Outer',              lat:21.0750,lng:79.0350},
+];
+
+/* ═══════════════════════════════════════════════════
+   Constants
+═══════════════════════════════════════════════════ */
+const CLS = ['Longitudinal Crack','Transverse Crack','Alligator Crack','Other Corruption','Pothole'];
+const COL = ['#e04a49','#e8a020','#4caf72','#5b9cf6','#a78bfa'];
+const SV_LIMIT = 150;
+
+/* ═══════════════════════════════════════════════════
+   State
+═══════════════════════════════════════════════════ */
+let mode        = 'mapillary';
+let activeImg   = null;
+let activeMlyUrl= null;
+let activeSvBlob= null;
+let svPanorama  = null;
+let svLoaded    = false;
+let svCurrentLat= 21.1458;
+let svCurrentLng= 79.0882;
+
+let selectedZoneFilter = 'all';
+let selectedPoint = null;
+let inspection = {};   // { pointId: 'clean'|'damaged'|'no-coverage'|'unvisited' }
+POINTS.forEach(p => inspection[p.id] = 'unvisited');
+
+let autoMode    = false;
+let autoStopped = false;
+let skipCurrent = false;
+
+/* ═══════════════════════════════════════════════════
+   Leaflet Map
+═══════════════════════════════════════════════════ */
+let map, markers = {};
+
+function initMap() {
+  map = L.map('leaflet-map', {
+    center: [21.1458, 79.0882], zoom: 11,
+    zoomControl: true, attributionControl: false,
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
+
+  POINTS.forEach(p => {
+    const m = L.circleMarker([p.lat, p.lng], {
+      radius: 5, color: '#1e1e1e', weight: 1,
+      fillColor: '#4a4744', fillOpacity: 0.9
+    }).addTo(map);
+    m.bindTooltip(p.road, { className:'', permanent:false, direction:'top' });
+    m.on('click', () => selectPoint(p));
+    markers[p.id] = m;
+  });
+}
+
+function updateMapMarker(id) {
+  const p = POINTS.find(p => p.id === id);
+  if (!p || !markers[id]) return;
+  const z = ZONES.find(z => z.id === p.zone);
+  const status = inspection[id];
+  const isActive = selectedPoint && selectedPoint.id === id;
+
+  let fill = '#4a4744', radius = 5, opacity = 0.8;
+  if (status === 'clean')       { fill = '#4caf72'; opacity = 1; }
+  else if (status === 'damaged'){ fill = '#e04a49'; opacity = 1; }
+  else if (status === 'no-coverage') { fill = '#333'; opacity = 0.5; }
+  else if (z)                   { fill = z.color + '88'; }
+
+  if (isActive) { radius = 8; opacity = 1; fill = '#e8a020'; }
+
+  markers[id].setStyle({ fillColor: fill, fillOpacity: opacity, radius });
+}
+
+function flyToPoint(p) {
+  map.flyTo([p.lat, p.lng], 14, { animate:true, duration:0.8 });
+}
+
+/* ═══════════════════════════════════════════════════
+   Zone filter & point list
+═══════════════════════════════════════════════════ */
+function buildZoneRow() {
+  const row = document.getElementById('zone-row');
+  ZONES.forEach(z => {
+    const btn = document.createElement('button');
+    btn.className = 'zone-btn';
+    btn.dataset.zone = z.id;
+    btn.textContent = z.name;
+    btn.style.cssText = `border-bottom-color:${z.color}20`;
+    btn.onclick = () => filterZone(z.id);
+    row.appendChild(btn);
+  });
+}
+
+function filterZone(zoneId) {
+  selectedZoneFilter = zoneId;
+  document.querySelectorAll('.zone-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.zone === zoneId);
+  });
+  renderPointList();
+}
+
+function renderPointList() {
+  const list = document.getElementById('point-list');
+  const pts = selectedZoneFilter === 'all'
+    ? POINTS
+    : POINTS.filter(p => p.zone === selectedZoneFilter);
+
+  list.innerHTML = pts.map(p => {
+    const z = ZONES.find(z => z.id === p.zone);
+    const status = inspection[p.id];
+    const isActive = selectedPoint && selectedPoint.id === p.id;
+    const statusColor = status === 'clean' ? '#4caf72'
+                      : status === 'damaged' ? '#e04a49'
+                      : status === 'no-coverage' ? '#333'
+                      : z ? z.color + '88' : '#4a4744';
+    const statusText = status === 'clean' ? '✓' : status === 'damaged' ? '!' : status === 'no-coverage' ? '—' : '';
+    const statusTxColor = status === 'clean' ? '#4caf72' : status === 'damaged' ? '#e04a49' : '#4a4744';
+    return `<div class="pt-item${isActive?' active':''}" onclick="selectPoint(POINTS.find(p=>p.id==='${p.id}'))">
+      <div class="pt-dot" style="background:${statusColor}"></div>
+      <div class="pt-info">
+        <div class="pt-id">${p.id.toUpperCase()} · ${z ? z.name : ''}</div>
+        <div class="pt-road">${p.road}</div>
+      </div>
+      <div class="pt-status" style="color:${statusTxColor}">${statusText}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   Point selection
+═══════════════════════════════════════════════════ */
+function selectPoint(p, scroll = true) {
+  if (selectedPoint) updateMapMarker(selectedPoint.id);
+  selectedPoint = p;
+  updateMapMarker(p.id);
+  flyToPoint(p);
+  if (scroll) {
+    // Scroll point list item into view
+    setTimeout(() => {
+      const items = document.querySelectorAll('.pt-item');
+      const pts = selectedZoneFilter==='all' ? POINTS : POINTS.filter(pt=>pt.zone===selectedZoneFilter);
+      const idx = pts.findIndex(pt => pt.id === p.id);
+      if (idx >= 0 && items[idx]) items[idx].scrollIntoView({block:'nearest', behavior:'smooth'});
+    }, 100);
+  }
+  renderPointList();
+  document.getElementById('pt-name-tag').innerHTML = `<span>${p.road}</span> · ${p.id.toUpperCase()} · ${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
+
+  searchMapillaryForPoint(p);
+  resetResult();
+}
+
+/* ═══════════════════════════════════════════════════
+   Mode switching
+═══════════════════════════════════════════════════ */
+function setMode(m) {
+  // Street View is coming soon — always fall back to Mapillary
+  if (m === 'streetview') m = 'mapillary';
+  mode = m;
+  document.getElementById('tab-mly').classList.toggle('active', m==='mapillary');
+  document.getElementById('mly-creds').style.display = 'flex';
+  document.getElementById('sv-creds').style.display  = 'none';
+  document.getElementById('mly-ui').style.display    = 'flex';
+  document.getElementById('sv-ui').style.display     = 'none';
+  document.getElementById('analyse-btn').disabled = true;
+  document.getElementById('analyse-btn').textContent = 'Analyse';
+  activeImg = null; activeMlyUrl = null; activeSvBlob = null;
+  resetResult();
+}
+
+/* ═══════════════════════════════════════════════════
+   Mapillary — search for a point
+═══════════════════════════════════════════════════ */
+async function fetchMapillaryImages(lat, lng, tok, radius = 0.004) {
+  const url = `https://graph.mapillary.com/images?access_token=${tok}&bbox=${lng-radius},${lat-radius},${lng+radius},${lat+radius}&limit=8&fields=id,thumb_256_url,thumb_2048_url,compass_angle,geometry`;
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    return j.data || [];
+  } catch { return []; }
+}
+
+async function searchMapillaryForPoint(p, silent = false) {
+  const tok = document.getElementById('mly-token').value.trim();
+  if (!tok) { document.getElementById('mly-empty').style.display='flex'; return []; }
+
+  if (!silent) setPill('run','searching');
+  let images = await fetchMapillaryImages(p.lat, p.lng, tok);
+  if (!images.length) images = await fetchMapillaryImages(p.lat, p.lng, tok, 0.008);
+
+  if (!silent) setPill('idle','idle');
+
+  const thumbRow = document.getElementById('mly-thumbs');
+  if (!images.length) {
+    thumbRow.innerHTML = '';
+    document.getElementById('mly-empty').style.display = 'flex';
+    document.getElementById('analyse-btn').disabled = true;
+    return [];
+  }
+
+  thumbRow.innerHTML = images.map((img,i) =>
+    `<img class="mly-thumb" src="${img.thumb_256_url}"
+      onclick="selectMly(this,'${img.thumb_2048_url||img.thumb_256_url}','${img.id}')"
+      alt="${i}" loading="lazy"/>`
+  ).join('');
+  document.getElementById('mly-empty').style.display = 'none';
+  return images;
+}
+
+function selectMly(el, fullUrl, id) {
+  document.querySelectorAll('.mly-thumb').forEach(t => t.classList.remove('sel'));
+  el.classList.add('sel');
+  activeMlyUrl = fullUrl; activeSvBlob = null;
+  const img = document.getElementById('mly-img');
+  img.classList.remove('vis');
+  img.onload = () => { img.classList.add('vis'); activeImg = img; document.getElementById('analyse-btn').disabled = false; };
+  img.onerror = () => { setPill('err','load error'); };
+  img.src = fullUrl;
+  document.getElementById('mly-canvas').getContext('2d').clearRect(0,0,9999,9999);
+  resetResult();
+}
+
+/* ═══════════════════════════════════════════════════
+   Street View
+═══════════════════════════════════════════════════ */
+function loadSVForPoint(p) {
+  const key = document.getElementById('gmaps-key').value.trim();
+  if (!key) { document.getElementById('sv-empty').style.display='flex'; return; }
+  svCurrentLat = p.lat; svCurrentLng = p.lng;
+  if (!svLoaded) {
+    svLoaded = true;
+    window._initPanorama = initPanorama;
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&callback=_initPanorama`;
+    s.async = true;
+    document.head.appendChild(s);
+  } else if (svPanorama) {
+    svPanorama.setPosition({lat:p.lat,lng:p.lng});
+    backToPanorama();
+    document.getElementById('analyse-btn').disabled = false;
+  }
+}
+function initPanorama() {
+  document.getElementById('sv-empty').style.display='none';
+  svPanorama = new google.maps.StreetViewPanorama(
+    document.getElementById('sv-panorama'),
+    { position:{lat:svCurrentLat,lng:svCurrentLng}, pov:{heading:0,pitch:0}, zoom:1,
+      addressControl:false, showRoadLabels:true, motionTracking:false,
+      motionTrackingControl:false, fullscreenControl:false, linksControl:true }
+  );
+  svPanorama.addListener('position_changed', () => {
+    const pos = svPanorama.getPosition();
+    svCurrentLat = pos.lat(); svCurrentLng = pos.lng();
+  });
+  document.getElementById('analyse-btn').disabled = false;
+}
+function backToPanorama() { /* Street View coming soon */ }
+
+/* ── Quota ── */
+function _svKey() { return 'crk_sv_'+new Date().toISOString().slice(0,10); }
+function _lsGet() { Object.keys(localStorage).filter(k=>k.startsWith('crk_sv_')&&k!==_svKey()).forEach(k=>localStorage.removeItem(k)); return parseInt(localStorage.getItem(_svKey())||'0',10); }
+function _lsInc() { const n=_lsGet()+1; localStorage.setItem(_svKey(),String(n)); return n; }
+async function _serverQuota(inc=false) {
+  const base=(document.getElementById('backend').value.trim()).replace(/\/$/,'');
+  if(!base)return null;
+  try {
+    const r=await fetch(`${base}/quota${inc?'/increment':''}`,{method:inc?'POST':'GET'});
+    if(!r.ok)return null; return await r.json();
+  } catch {return null;}
+}
+function updateQuotaUI(used) {
+  const pct=Math.min(100,used/SV_LIMIT*100);
+  document.getElementById('q-used').textContent=used;
+  document.getElementById('q-fill').style.width=pct+'%';
+  const el=document.getElementById('sv-quota');
+  el.className='sv-quota'+(pct>=100?' q-crit':pct>=80?' q-warn':'');
+}
+async function captureAndAnalyseSV() {
+  if (!svPanorama) return;
+  const btn=document.getElementById('analyse-btn');
+  btn.disabled=true; btn.textContent='Checking…'; setPill('run','checking');
+  const preCheck=await _serverQuota();
+  const usedNow=preCheck?preCheck.used:_lsGet();
+  if(usedNow>=SV_LIMIT){setPill('err','limit reached');btn.disabled=false;btn.textContent='Capture & Analyse';alert('Daily limit reached (150/150). Resets at midnight UTC.');return;}
+  btn.textContent='Capturing…'; setPill('run','capturing');
+  const pos=svPanorama.getPosition(),pov=svPanorama.getPov(),zoom=svPanorama.getZoom();
+  const fov=Math.max(10,Math.round(120/Math.pow(2,zoom-1)));
+  const lat=pos.lat().toFixed(6),lng=pos.lng().toFixed(6),heading=Math.round(pov.heading),pitch=Math.round(pov.pitch);
+  const key=document.getElementById('gmaps-key').value.trim();
+  const staticUrl=`https://maps.googleapis.com/maps/api/streetview?size=1280x720&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${fov}&key=${key}`;
+  try {
+    const resp=await fetch(staticUrl); if(!resp.ok)throw new Error('HTTP '+resp.status);
+    const blob=await resp.blob();
+    activeSvBlob=new File([blob],'sv.jpg',{type:'image/jpeg'}); activeMlyUrl=null;
+    const inc=await _serverQuota(true);
+    if(inc&&inc.blocked){setPill('err','limit reached');btn.disabled=false;btn.textContent='Capture & Analyse';return;}
+    updateQuotaUI(inc?inc.used:_lsInc());
+    const blobUrl=URL.createObjectURL(blob);
+    const img=document.getElementById('sv-img');
+    img.onload=async()=>{
+      activeImg=img;
+      document.getElementById('sv-captured').style.display='block';
+      document.getElementById('sv-coord').textContent=`${lat}, ${lng} · hdg ${heading}°`;
+      await runAnalysis();
+    };
+    img.src=blobUrl;
+  } catch(e){setPill('err','capture failed');btn.disabled=false;btn.textContent='Capture & Analyse';}
+}
+
+/* ═══════════════════════════════════════════════════
+   Analysis
+═══════════════════════════════════════════════════ */
+async function runAnalysis() {
+  if(!activeImg)return;
+  const btn=document.getElementById('analyse-btn');
+  btn.disabled=true;btn.textContent='…';setPill('run','running');
+  const base=(document.getElementById('backend').value.trim()).replace(/\/$/,'');
+  let dets=null;
+  if(base){
+    try {
+      if(activeMlyUrl){
+        const r=await fetch(`${base}/detect-url`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:activeMlyUrl})});
+        if(r.ok){const d=await r.json();dets=d.detections;}
+      }
+      document.getElementById('cdot').className='cdot ok';
+    } catch{document.getElementById('cdot').className='cdot err';}
+  }
+  if(!dets)dets=fakeDets();
+  await new Promise(r=>setTimeout(r,300));
+  drawBoxes('mly-canvas',activeImg,dets);
+  renderResult(dets);
+  setPill('ok','done');
+  if(selectedPoint){
+    const status=dets.length>0?'damaged':'clean';
+    markStatus(selectedPoint.id,status);
+  }
+  btn.disabled=false;
+  btn.textContent='Analyse';
+}
+
+function drawBoxes(canvasId,img,dets){
+  const canvas=document.getElementById(canvasId);
+  const wrap=canvas.parentElement;
+  canvas.width=wrap.offsetWidth;canvas.height=wrap.offsetHeight;
+  const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+  const iw=img.naturalWidth||1280,ih=img.naturalHeight||720,cw=canvas.width,ch=canvas.height;
+  const scale=Math.min(cw/iw,ch/ih);
+  const rw=iw*scale,rh=ih*scale,ox=(cw-rw)/2,oy=(ch-rh)/2;
+  dets.forEach(d=>{
+    const[x1n,y1n,x2n,y2n]=d.bbox;
+    const x1=ox+x1n*rw,y1=oy+y1n*rh,x2=ox+x2n*rw,y2=oy+y2n*rh;
+    const col=COL[d.class_id]||'#fff';
+    ctx.strokeStyle=col;ctx.lineWidth=2;
+    ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+    const lbl=`${CLS[d.class_id].split(' ')[0]} ${Math.round(d.confidence*100)}%`;
+    ctx.font='500 10px "IBM Plex Mono",monospace';
+    const tw=ctx.measureText(lbl).width;
+    ctx.fillStyle=col+'cc';ctx.fillRect(x1,Math.max(0,y1-17),tw+10,17);
+    ctx.fillStyle='#fff';ctx.fillText(lbl,x1+5,Math.max(12,y1-4));
+  });
+}
+
+function renderResult(dets){
+  const score=calcScore(dets);
+  const[sClass,verdict,sub,recClass,rec]=scoreInfo(dets,score);
+  document.getElementById('empty-r').style.display='none';
+  const el=document.getElementById('r-result');
+  el.style.display='block';
+  const barCol=sClass==='s-good'?'#4caf72':sClass==='s-mod'?'#e8a020':'#e04a49';
+  el.innerHTML=`
+  <div class="rsec">
+    <div class="slbl">Condition Score</div>
+    <div class="score-row">
+      <div class="score-num ${sClass}">${score}</div>
+      <div style="flex:1">
+        <div class="sbar"><div class="sbar-fill" style="width:${score}%;background:${barCol}"></div></div>
+        <div class="verdict">${verdict}</div>
+        <div class="verdict-sub">${sub}</div>
+      </div>
+    </div>
+  </div>
+  <div class="rsec">
+    <div class="slbl">Summary</div>
+    <div class="sgrid">
+      <div class="stile"><div class="t">Detections</div><div class="v">${dets.length}</div></div>
+      <div class="stile"><div class="t">Peak Conf.</div><div class="v">${dets.length?Math.round(Math.max(...dets.map(d=>d.confidence))*100)+'%':'—'}</div></div>
+      <div class="stile"><div class="t">Road</div><div class="v" style="font-size:9px">${selectedPoint?selectedPoint.road.split('–')[0].trim():'—'}</div></div>
+      <div class="stile"><div class="t">Zone</div><div class="v" style="font-size:10px">${selectedPoint?(ZONES.find(z=>z.id===selectedPoint.zone)||{name:'—'}).name:'—'}</div></div>
+    </div>
+  </div>
+  <div class="rsec">
+    <div class="slbl">Detections</div>
+    <div class="det-list">
+      ${dets.length===0?'<div class="no-det">✓ No damage detected</div>':
+        dets.map(d=>`<div class="drow">
+          <div class="ddot" style="background:${COL[d.class_id]}"></div>
+          <div class="dname">${CLS[d.class_id]}</div>
+          <div class="dbar"><div class="dbar-fill" style="width:${Math.round(d.confidence*100)}%;background:${COL[d.class_id]}"></div></div>
+          <div class="dpct">${Math.round(d.confidence*100)}%</div>
+        </div>`).join('')}
+    </div>
+  </div>
+  <div class="rsec">
+    <div class="slbl">Recommendation</div>
+    <div class="rec ${recClass}">${rec}</div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   Coverage tracking
+═══════════════════════════════════════════════════ */
+function markStatus(id, status) {
+  inspection[id] = status;
+  updateMapMarker(id);
+  renderPointList();
+  updateCoverage();
+}
+
+function updateCoverage() {
+  const all = POINTS.length;
+  const scanned = POINTS.filter(p => inspection[p.id] !== 'unvisited').length;
+  const clean   = POINTS.filter(p => inspection[p.id] === 'clean').length;
+  const damaged = POINTS.filter(p => inspection[p.id] === 'damaged').length;
+  const pct = Math.round(scanned/all*100);
+
+  document.getElementById('prog-label').textContent = `${scanned} / ${all} inspected`;
+  document.getElementById('prog-nums').textContent = pct+'%';
+  document.getElementById('prog-fill').style.width = pct+'%';
+  document.getElementById('cv-scanned').textContent = scanned;
+  document.getElementById('cv-clean').textContent = clean;
+  document.getElementById('cv-damaged').textContent = damaged;
+
+  // Zone coverage
+  const zoneCov = document.getElementById('zone-coverage');
+  zoneCov.innerHTML = ZONES.map(z => {
+    const pts = POINTS.filter(p => p.zone === z.id);
+    const done = pts.filter(p => inspection[p.id] !== 'unvisited').length;
+    const dmg  = pts.filter(p => inspection[p.id] === 'damaged').length;
+    const cln  = pts.filter(p => inspection[p.id] === 'clean').length;
+    const p    = Math.round(done/pts.length*100);
+    return `<div class="cov-zone" onclick="filterZone('${z.id}')">
+      <div class="cov-zone-head">
+        <div class="cov-zone-name">
+          <div class="cov-dot" style="background:${z.color}"></div>
+          ${z.name}
+        </div>
+        <div class="cov-pct">${done}/${pts.length} · ${p}%</div>
+      </div>
+      <div class="cov-bar"><div class="cov-fill" style="width:${p}%;background:${z.color}"></div></div>
+      <div class="cov-stats">
+        <div class="cov-stat">Clean: <span>${cln}</span></div>
+        <div class="cov-stat">Damaged: <span>${dmg}</span></div>
+        <div class="cov-stat">Remaining: <span>${pts.length-done}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   AUTO SCAN
+═══════════════════════════════════════════════════ */
+function toggleAutoScan() {
+  if (autoMode) stopAutoScan();
+  else startAutoScan();
+}
+
+function startAutoScan() {
+  const tok = document.getElementById('mly-token').value.trim();
+  if (mode === 'mapillary' && !tok) { alert('Enter your Mapillary token first (it\'s free at mapillary.com)'); return; }
+  autoMode = true; autoStopped = false;
+  document.getElementById('auto-btn').textContent = '■ Stop Scan';
+  document.getElementById('auto-btn').className = 'btn btn-stop';
+  document.getElementById('auto-banner').classList.add('vis');
+  switchTab('coverage');
+  autoLoop();
+}
+
+function stopAutoScan() {
+  autoMode = false; autoStopped = true;
+  document.getElementById('auto-btn').textContent = '▶ Auto Scan';
+  document.getElementById('auto-btn').className = 'btn btn-acc';
+  document.getElementById('auto-banner').classList.remove('vis');
+  document.getElementById('auto-status').style.display = 'none';
+}
+
+function skipPoint() { skipCurrent = true; }
+
+async function autoLoop() {
+  let consecutiveNoCoverage = 0;
+  while (autoMode && !autoStopped) {
+    const pts = selectedZoneFilter==='all' ? POINTS : POINTS.filter(p=>p.zone===selectedZoneFilter);
+    const next = pts.find(p => inspection[p.id]==='unvisited');
+    if (!next) {
+      stopAutoScan();
+      alert(`✅ All ${pts.length} points in "${selectedZoneFilter==='all'?'Nagpur':ZONES.find(z=>z.id===selectedZoneFilter)?.name}" have been scanned!`);
+      return;
+    }
+
+    skipCurrent = false;
+    const done   = POINTS.filter(p=>inspection[p.id]!=='unvisited').length;
+    const banner = `Auto scanning: ${done+1}/${POINTS.length} · ${next.road}`;
+    document.getElementById('auto-banner-text').textContent = banner;
+
+    selectPoint(next, true);
+
+    if (mode === 'mapillary') {
+      await autoScanPoint_Mapillary(next);
+    } else {
+      // SV: just navigate, mark as "navigated" and let user capture manually
+      await sleep(1000); // let map fly
+      markStatus(next.id, 'unvisited'); // keep as unvisited (user must manually capture)
+      // In SV mode, auto just navigates. Break after loading current point.
+      break;
+    }
+
+    if (!skipCurrent) await sleep(1200);
+  }
+}
+
+async function autoScanPoint_Mapillary(p) {
+  const tok = document.getElementById('mly-token').value.trim();
+  setPill('run','searching');
+  const images = await searchMapillaryForPoint(p, true);
+
+  if (!images.length) {
+    markStatus(p.id,'no-coverage');
+    setPill('idle','no coverage');
+    return;
+  }
+
+  // Auto-select first image
+  const firstThumb = document.querySelectorAll('.mly-thumb')[0];
+  if (firstThumb) {
+    selectMly(firstThumb, images[0].thumb_2048_url || images[0].thumb_256_url, images[0].id);
+    renderPointList(); // show as active
+  }
+
+  // Wait for image to load
+  await waitForImageLoad('mly-img', 6000);
+  if (skipCurrent || !autoMode) return;
+  if (!activeImg) { markStatus(p.id,'no-coverage'); return; }
+
+  // Run analysis
+  await runAnalysis();
+  await sleep(800);
+}
+
+function waitForImageLoad(imgId, timeout=5000) {
+  return new Promise(resolve => {
+    const img = document.getElementById(imgId);
+    if (img.complete && img.naturalWidth>0) { resolve(); return; }
+    const t = setTimeout(resolve, timeout);
+    img.onload = () => { clearTimeout(t); resolve(); };
+    img.onerror = () => { clearTimeout(t); resolve(); };
+  });
+}
+
+function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
+
+/* ═══════════════════════════════════════════════════
+   Helpers
+═══════════════════════════════════════════════════ */
+function switchTab(t) {
+  ['result','coverage'].forEach(x=>{
+    document.getElementById('rtab-'+x).classList.toggle('active',x===t);
+    document.getElementById('rpanel-'+x).classList.toggle('active',x===t);
+  });
+}
+function setPill(state,text){
+  const p=document.getElementById('pill');
+  p.textContent=text;
+  p.className='badge-pill '+(state==='run'?'bp-run':state==='ok'?'bp-ok':state==='err'?'bp-err':'bp-idle');
+}
+function resetResult(){
+  document.getElementById('empty-r').style.display='flex';
+  document.getElementById('r-result').style.display='none';
+  document.getElementById('analyse-btn').disabled=true;
+  setPill('idle','idle');
+}
+function calcScore(dets){
+  if(!dets.length)return 5;
+  const w=[0.6,0.6,0.9,0.5,1.0];
+  const raw=dets.reduce((s,d)=>s+(w[d.class_id]||0.5)*d.confidence,0);
+  return Math.min(97,Math.round(raw*42+dets.length*9));
+}
+function scoreInfo(dets,score){
+  if(score<30)return['s-good','Good Condition','No urgent action required','rec-g','Road surface appears structurally sound. Continue routine inspection schedule. Apply preventive crack sealant at next maintenance window.'];
+  if(score<65)return['s-mod','Moderate Damage','Schedule repair within 30 days','',
+    dets.some(d=>d.class_id===2)?'Alligator cracking indicates base layer failure. Surface patching alone is insufficient — plan full-depth reclamation.':'Surface cracking detected. Apply hot-mix asphalt patching and sealant. Re-inspect in 60 days.'];
+  return['s-bad','Critical Damage','Immediate repair required','rec-u',
+    dets.some(d=>d.class_id===4)?'Active potholes present — immediate hazard. Emergency patching required. Consider temporary speed restrictions.':'Severe cracking detected. Prioritise full resurfacing or structural overlay. Flag for emergency maintenance budget.'];
+}
+function fakeDets(){
+  const pool=[
+    {class_id:0,confidence:.87,bbox:[.08,.36,.50,.44]},
+    {class_id:4,confidence:.81,bbox:[.55,.50,.78,.72]},
+    {class_id:2,confidence:.65,bbox:[.20,.55,.55,.82]},
+    {class_id:1,confidence:.73,bbox:[.04,.40,.88,.48]},
+  ];
+  const n=Math.random()>.35?1+Math.floor(Math.random()*2):0;
+  return[...pool].sort(()=>Math.random()-.5).slice(0,n);
+}
+function saveMlyToken(){const v=document.getElementById('mly-token').value.trim();if(v)sessionStorage.setItem('crk_mly',v);}
+function saveGmapsKey(){const v=document.getElementById('gmaps-key').value.trim();if(v)sessionStorage.setItem('crk_gmaps',v);}
+async function refreshQuota(){const q=await _serverQuota();updateQuotaUI(q?q.used:_lsGet());}
+
+/* ═══════════════════════════════════════════════════
+   Init
+═══════════════════════════════════════════════════ */
+window.addEventListener('load', async () => {
+  initMap();
+  buildZoneRow();
+  renderPointList();
+  updateCoverage();
+
+  // ── Mapillary token is baked in at deploy time via GitHub Actions secret.
+  // Save it to sessionStorage so it persists across soft refreshes.
+  const tok = document.getElementById('mly-token').value.trim();
+  if (tok && tok !== '') sessionStorage.setItem('crk_mly', tok);
+
+  refreshQuota();
+});
+</script>
+</body>
+</html>
